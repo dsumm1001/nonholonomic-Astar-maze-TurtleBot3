@@ -21,7 +21,8 @@ def cost(Xi,Yi,Thetai,UL,UR):
         Delta_Xn = 0.5*r * (UL + UR) * math.cos(Thetan) * dt
         Delta_Yn = 0.5*r * (UL + UR) * math.sin(Thetan) * dt
         Thetan += (r / L) * (UR - UL) * dt
-        D = D + math.sqrt(math.pow((0.5*r * (UL + UR) * math.cos(Thetan) * dt),2)+math.pow((0.5*r * (UL + UR) * math.sin(Thetan) * dt),2))
+        D = D + math.sqrt(math.pow((0.5*r * (UL + UR) * math.cos(Thetan) * dt),2) + 
+                          math.pow((0.5*r * (UL + UR) * math.sin(Thetan) * dt),2))
     Thetan = 180 * (Thetan) / 3.14
     return Xn, Yn, Thetan, D
     

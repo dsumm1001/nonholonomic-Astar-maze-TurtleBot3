@@ -27,6 +27,7 @@ def plot_curve(Xi,Yi,Thetai,UL,UR):
         plt.plot([Xs, Xn], [Ys, Yn], color="blue")
         
     Thetan = 180 * (Thetan) / 3.14
+    #plt.show()
     return Xn, Yn, Thetan, D
     
 actions=[[5,5], [10,10],[5,0],[0,5],[5,10],[10,5]]

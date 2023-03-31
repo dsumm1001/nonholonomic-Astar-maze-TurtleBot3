@@ -27,13 +27,13 @@ import sys
 def getValidRPMs(rpmThresh):
     while True:
         try:
-            rpmInput = input("Enter two wheel RPMs [rev per minute] as integer values between ", rpmThresh[0], " - ", rpmThresh[1], " , separated by a comma: ")
+            rpmInput = input("Enter two wheel RPMs [rev per minute] as integer values between " + str(rpmThresh[0]) + " - " + str(rpmThresh[1]) + " , separated by a comma: ")
             rpms = tuple(int(item) for item in rpmInput.split(','))
         except ValueError:
-            print("Sorry, results invalid. Please try again, entering the wheel RPMs as integer values between ", rpmThresh[0], " - ", rpmThresh[1], " , separated by a comma: ")
+            print("Sorry, results invalid. Please try again, entering the wheel RPMs as integer values between " + str(rpmThresh[0]) + " - " + str(rpmThresh[1]) + " , separated by a comma: ")
             continue
         if ((rpms[0] or rpms[1]) < rpmThresh[0]) or ((rpms[0] or rpms[1]) > rpmThresh[1]):
-            print("Sorry, results invalid. Please try again, entering the wheel RPMs as integer values between ", rpmThresh[0], " - ", rpmThresh[1], " , separated by a comma: ")
+            print("Sorry, results invalid. Please try again, entering the wheel RPMs as integer values between " + str(rpmThresh[0]) + " - " + str(rpmThresh[1]) + " , separated by a comma: ")
             continue
         else:
             break
@@ -42,19 +42,20 @@ def getValidRPMs(rpmThresh):
 def getValidClearance(robotRadius):
     while True:
         try:
-            print("The radius of the Turtlebot3 burger model is approximately ", robotRadius, " []. ")
-            clearance = int(input("Please enter the desired obstacle clearance as an integer value between ", robotRadius, " and 12 []: "))
+            print("The radius of the Turtlebot3 burger model is approximately ", (robotRadius*1000), " [mm]. ")
+            clearance = int(input("Please enter the desired obstacle clearance as an integer value between " + str(robotRadius*1000) + " and 120 [mm]: "))
         except ValueError:
-            print("Sorry, results invalid. Please try again, entering the desired obstacle clearance as an integer value between ", robotRadius, " and 12 []: ")
+            print("Sorry, results invalid. Please try again, entering the desired obstacle clearance as an integer value between " + str(robotRadius*1000) + " and 120 [mm]: ")
             continue
-        if clearance < robotRadius or clearance >= 13:
-            print("Sorry, results invalid. Please try again, entering the desired obstacle clearance as an integer value between ", robotRadius, " and 12 []: ")
+        if clearance < robotRadius*1000 or clearance >= 130:
+            print("Sorry, results invalid. Please try again, entering the desired obstacle clearance as an integer value between " + str(robotRadius*1000) + " and 120 [mm]: ")
             continue
         else:
             break
+    clearance = int(round(clearance/10))
     return clearance
 
-def getValidCoords(type, maze, clearance, x2Maze):
+def getValidCoords(type, maze, clearance):
     theta = None
 
     while True:
@@ -75,14 +76,14 @@ def getValidCoords(type, maze, clearance, x2Maze):
 
     while True and type == "start":
         try:
-            theta = int(input("Enter " + type + " node orientation as an integer between 0-360, using increments of 30 deg: "))
-            if theta % 30 !=0:
+            theta = int(input("Enter " + type + " node orientation as an integer between 0-359, using increments of 1 deg: "))
+            if theta >= 360 or theta < 0:
                 raise ValueError
         except ValueError:
-            print(("Sorry, entry invalid. Please try again, entering an integer input between 0-360 in increments of 30. "))
+            print(("Sorry, entry invalid. Please try again, entering an integer input between 0-359 in increments of 1 deg. "))
             continue
-        if searchNode((coords,theta), x2Maze) == False:
-            print(("Sorry, entry invalid. Please try again, entering an integer input between 0-360 in increments of 30, oriented toward the center of the mazespace. "))
+        if searchNode((coords,theta), RPM1, RPM2, maze) == False:
+            print(("Sorry, entry invalid. Please try again, entering an integer input between 0-359 in increments of 1 deg, oriented toward the center of the mazespace. "))
             continue
         else:
             break
@@ -152,88 +153,100 @@ def drawMaze(clearance):
 
 def checkObstacle(xyCoords, maze):
     try:
-        if all(maze[(int(2*xyCoords[1]), int(2*xyCoords[0]))] == [255,255,255]):
+        if all(maze[xyCoords[1],xyCoords[0]] == [255, 255, 255]):
             return False
         else:
             return True
     except IndexError:
         return True
-    
-def roundCoord(val):
-    return round(val * 2) / 2
 
 def normalizeAngle(ang):
     ang = ang % 360
     return ang
 
-def cost(Xi, Yi, Thetai, RPM1, RPM2):
+# [cost, index, coords, c2c]
+def actionCost(nodeCoords, RPM1, RPM2, maze):
     t = 0
-    D = 0
+    step = 0
+    thetaNew = math.pi * nodeCoords[1] / 180  # converts deg to rad
+    xNew = nodeCoords[0][0]
+    yNew = nodeCoords[0][1]
 
-    Xn = Xi
-    Yn = Yi
-    Thetan = math.pi * Thetai / 180
+    incrementCoords = []
+    incrementCoords.append((xNew,yNew))
 
     while t < 1:
         t = t + dt
-        Xs = Xn
-        Ys = Yn
-        Xnew = 0.5 *wheelRadius* (RPM1 + RPM2) * math.cos(Thetan) * dt
-        Ynew = 0.5 *wheelRadius* (RPM1 + RPM2) * math.sin(Thetan) * dt
-        Thetan += (wheelRadius / wheelBase) * (RPM2 - RPM1) * dt
-        D = D + math.sqrt(
-            math.pow((0.5 *wheelRadius* (RPM1 + RPM2) * math.cos(Thetan) * dt), 2)
-            + math.pow((0.5 * wheelRadius * (RPM1 + RPM2) * math.sin(Thetan) * dt), 2)
+
+        deltaX = 0.5 * wheelRadius * (RPM1 + RPM2) * math.cos(thetaNew) * dt
+        xNew += deltaX
+
+        deltaY = 0.5 * wheelRadius * (RPM1 + RPM2) * math.sin(thetaNew) * dt
+        yNew += deltaY
+
+        incrementCoords.append((xNew,yNew))
+
+        deltaTheta = (wheelRadius / wheelBase) * ((2*math.pi/60)*RPM2 - (2*math.pi/60)*RPM1) * dt
+        # print(wheelRadius/wheelBase)
+        # print(RPM1, type(RPM1))
+        # print(RPM2, type(RPM2))
+        # print(RPM2-RPM1)
+        # print((((2*math.pi)/60)*RPM2 - ((2*math.pi)/60)*RPM1))
+        thetaNew += deltaTheta
+
+        # print("xNew, yNew, thetaNew: ", xNew, yNew, thetaNew)
+        # print("deltaX, deltaY, deltaTheta: ", deltaX, deltaY, deltaTheta)
+
+        step += math.sqrt(
+            math.pow(deltaX, 2) + 
+            math.pow(deltaY, 2)
         )
-    Thetan = 180 * (Thetan) / math.pi
-    start_node = []
-    start_node.append((Xs, Ys))
-    return Xn, Yn, Thetan, D
-# I have created a list called start_node and added the X and y start to that list for plotting the curve. I'm not sure whether it is correct. Please have look
 
-# [cost, index, coords, c2c]
-def action(node, UL, UR, maze):
-    newX = roundCoord(node[0][0] + (0.5 *wheelRadius* (UL + UR) * math.cos(math.radians(node[1])) * dt))
-    newY = roundCoord(node[0][0] + (0.5 *wheelRadius* (UL + UR) * math.sin(math.radians(node[1])) * dt))
-    newTheta = normalizeAngle(node[1]) + (((wheelRadius / wheelBase) * (RPM2 - RPM1)) * dt)
+    thetaNew = 180 * (thetaNew) / math.pi
+    print("New final orientation: ", xNew, yNew, normalizeAngle(thetaNew))
+    #print("Substeps:", incrementCoords)
+    #input("Continue? /")
 
-    if checkObstacle((newX, newY), maze) == False:
-        newThetaup = [None, None, ((newX, newY), newTheta), None]
-        return newThetaup
+    if checkObstacle((round(xNew), round(yNew)), maze) == False:
+        #plotPoints = #getPlotPoints(xListofTen, YListofTen)
+        # [cost, index, coords, c2c, step]
+        newNode = [None, None, ((round(xNew), round(yNew)), round(normalizeAngle(thetaNew))), None, step]
+        return newNode #, plotPoints
     else:
+        print("Obstacle detected for this trajectory")
         return None
-
-def searchNode(nodeCoords, maze):
+ 
+def searchNode(nodeCoords, RPM1, RPM2, maze):
     results = []
-    action1 = action(nodeCoords, RPM1, RPM1, maze)
+    action1 = actionCost(nodeCoords, RPM1, RPM1, maze)
     if action1 is not None:
         results.append(action1)
 
-    action2 = action(nodeCoords, 0, RPM1, maze)
+    action2 = actionCost(nodeCoords, 0, RPM1, maze)
     if action2 is not None:
         results.append(action2)
 
-    action3 = action(nodeCoords, RPM1, 0, maze)
+    action3 = actionCost(nodeCoords, RPM1, 0, maze)
     if action3 is not None:
         results.append(action3)
 
-    action4 = action(nodeCoords, RPM2, RPM2, maze)
+    action4 = actionCost(nodeCoords, RPM2, RPM2, maze)
     if action4 is not None:
         results.append(action4)
 
-    action5 = action(nodeCoords, RPM1, RPM2, maze)
+    action5 = actionCost(nodeCoords, RPM1, RPM2, maze)
     if action5 is not None:
         results.append(action5)
 
-    action6 = action(nodeCoords, RPM2, RPM1, maze)
+    action6 = actionCost(nodeCoords, RPM2, RPM1, maze)
     if action6 is not None:
         results.append(action6)
 
-    action7 = action(nodeCoords, RPM2, 0, maze)
+    action7 = actionCost(nodeCoords, RPM2, 0, maze)
     if action7 is not None:
         results.append(action7)
 
-    action8 = action(nodeCoords, 0, RPM2, maze)
+    action8 = actionCost(nodeCoords, 0, RPM2, maze)
     if action8 is not None:
         results.append(action8)
     
@@ -278,33 +291,33 @@ def simulateBot(pathCoords, emptyMaze, clearance):
 print("\nWelcome to the A* Maze Finder Program! \n")
 
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-outVid = cv2.VideoWriter('output.mp4', fourcc, 30, (1200,500))
+outVid = cv2.VideoWriter('output.mp4', fourcc, 30, (600,250))
 
 # hardcode robot params
 turtlebot3Radius = .105 #[m]
 wheelRadius = 0.033 #[m]
 wheelBase = 0.160 #[m]
 dt = 0.1
+goalThresh = 3.0
 
 # get obstacle clearance
 clearance = getValidClearance(turtlebot3Radius)
 
 # draw maze and make reserve
 maze = drawMaze(clearance)
-doubleMaze = cv2.resize(maze, (maze.shape[1]*2, maze.shape[0]*2), interpolation = cv2.INTER_LINEAR)
-blankMaze = doubleMaze.copy()
+blankMaze = maze.copy()
 counter = 30
 while counter >=0:
     counter -= 1
     outVid.write(cv2.flip(blankMaze,0))
 
 # get RPMs
-rpmThresh = (1,100)
+rpmThresh = (1,200)
 RPM1, RPM2 = getValidRPMs(rpmThresh)
 
 # get start and goal nodes
-start = getValidCoords("start", maze, clearance, doubleMaze)
-goal = getValidCoords("goal", maze, clearance, doubleMaze)
+start = getValidCoords("start", maze, clearance)
+goal = getValidCoords("goal", maze, clearance)
 print()
 print("Pathfinding... \n")
 
@@ -322,35 +335,30 @@ c2cDict = {1:0}
 closedSet = set()
 closedList = []
 
-# initialize pathfinding matrix
-threshXY = 0.5
-threshTheta = 30
-graph = np.zeros((int(600/threshXY), int(250/threshXY), int(360/threshTheta)))
-
 # [cost, index, coords/theta, c2c]
 startNode = [0, 1, start, 0]
 index = startNode[1]
 
 openList.put(startNode)
-openSet.add(start)
+openSet.add(start[0])
+print(openSet)
 
 while not openList.empty() and solved == False:
     first = openList.get()
-    #print("Current Node: ", first)
-    openSet.remove(first[2])
+    print("Current Node: ", first)
+    print(openSet)
+    openSet.remove(first[2][0])
 
-    closedSet.add(first[2]) 
-    closedList.append(first[2])
+    closedSet.add(first[2][0]) 
+    closedList.append(first[2][0])
 
-    graph[int(2*first[2][0][0])][int(2*first[2][0][1])][int(first[2][1]/30)] = 1
-
-    if euclideanCostToGo(first[2][0], goal[0]) <= 1.5:
+    if euclideanCostToGo(first[2][0], goal[0]) <= goalThresh:
         elapsedTime = time.time() - startTime
         print ("Yay! Goal node located... Operation took ", elapsedTime, " seconds.")
         print("Current node index: ", first[1], " and cost: ", round(first[3],2), "\n")
         solved = True
 
-        dispMaze = doubleMaze.copy()
+        dispMaze = maze.copy()
 
         pathIndices, pathCoords = generatePath(first[1], first[2], dispMaze)
         print("Displaying generated path... close window to continue \n")
@@ -361,18 +369,18 @@ while not openList.empty() and solved == False:
         cv2.waitKey(0)
 
         print("Generating simulation...")
-        simulateBot(pathCoords, doubleMaze, clearance)
+        simulateBot(pathCoords, maze, clearance)
         print("Simulation complete! \n")
         break
 
-    results = searchNode(first[2], doubleMaze)
- 
+    results = searchNode(first[2], RPM1, RPM2, maze)
+    
     for i in results:
-        if graph[int(2*i[2][0][0])][int(2*i[2][0][1])][int(i[2][1]/30)] == 0:
+        if not i[2] in closedSet:
             if not i[2] in openSet:
                 index += 1
                 i[1] = index
-                i[3] = first[3]# + stepSize
+                i[3] = first[3] + i[4]
                 i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0])
 
                 parentDict[i[1]] = first[1]
@@ -381,26 +389,23 @@ while not openList.empty() and solved == False:
                 c2cDict[i[1]] = i[3]
 
                 openList.put(i)
-                openSet.add(i[2])
-
-                cv2.arrowedLine(doubleMaze, (int(2*first[2][0][0]),int(2*first[2][0][1])),
-                                 (int(2*i[2][0][0]),int(2*i[2][0][1])), 
-                                 color = [255,0,0], 
-                                 thickness = 1)
+                openSet.add(i[2][0])
                 
                 counter += 1
                 if counter >= 50:
-                    outVid.write(cv2.flip(doubleMaze,0))
+                    outVid.write(cv2.flip(maze,0))
                     counter = 0
                 
         else:
-            #print("Gotcha, ", i)
+            print("Gotcha, ", i)
             tempIndex = {j for j in coordDict if coordDict[j] == i[2]}
             tempIndex = tempIndex.pop()
-            if costDict[tempIndex] > first[3] : # + stepSize:
+            if costDict[tempIndex] > first[3] + i[4]:
                 parentDict[tempIndex] = first[1]
-                c2cDict[tempIndex] = first[3]# + stepSize
-                costDict[tempIndex] = first[3]# + stepSize + euclideanCostToGo(i[2][0], goal[0])
+                c2cDict[tempIndex] = first[3] + i[4]
+                costDict[tempIndex] = first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])
+
+    input("Progress to next node?")
 
 if solved == False:
     print ("Failure! Goal node not found")
@@ -429,12 +434,3 @@ print("Video displayed successfully! Program termination  \n")
 cv2.destroyAllWindows()
 
 # Resources
-# https://www.programiz.com/dsa/priority-queue
-# https://bobbyhadz.com/blog/python-input-tuple
-# https://stackoverflow.com/questions/23294658/asking-the-user-for-input-until-they-give-a-valid-response
-# https://www.w3schools.com/python/python_sets.asp
-# https://www.freecodecamp.org/news/python-set-how-to-create-sets-in-python/#:~:text=How%20to%20Add%20Items%20to%20a%20Set%20in%20Python,passed%20in%20as%20a%20parameter.&text=We%20added%20a%20new%20item,add(%22Ihechikara%22)%20.
-# https://stackoverflow.com/questions/30103077/what-is-the-codec-for-mp4-videos-in-python-opencv
-# https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
-# https://www.geeksforgeeks.org/python-play-a-video-using-opencv/
-# https://www.geeksforgeeks.org/python-opencv-cv2-arrowedline-method/
