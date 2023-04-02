@@ -23,6 +23,7 @@ import math
 from queue import PriorityQueue
 import time
 import sys
+from collections import OrderedDict
 
 
 def getValidRPMs(rpmThresh):
@@ -104,7 +105,7 @@ def getValidCoords(type, maze, clearance):
             coordInput = input(
                 "Enter "
                 + type
-                + " node coordinates in x, y format, separated by a comma: "
+                + " node coordinates in x, y format, in [cm], separated by a comma: "
             )
             coords = tuple(int(item) for item in coordInput.split(","))
         except ValueError:
@@ -303,9 +304,39 @@ def normalizeAngle(ang):
     ang = ang % 360
     return ang
 
-# def getPlotPoints(xlistof_Ten, ylistof_Ten):
-#     coordsList = [(int(round(x)), int(round(y))) for x, y in zip(xlistof_Ten, ylistof_Ten)]
-#     return set(coordsList)
+
+def getPlotPoints(floatPoints):
+    roundedPoints = [(round(x), round(y)) for x, y in floatPoints]
+    uniqueRoundedPoints = list(OrderedDict.fromkeys(roundedPoints))
+    return uniqueRoundedPoints
+
+
+def plotTrajectory(presentNode, plotPoints, maze):
+    for i in range(len(plotPoints) - 1):
+        cv2.line(
+            maze,
+            (plotPoints[i][0], plotPoints[i][1]),
+            (plotPoints[i + 1][0], plotPoints[i + 1][1]),
+            color=[255, 0, 0],
+            thickness=1,
+        )
+
+        # if i == 0:
+        #     cv2.line(
+        #             maze,
+        #             (presentNode[0], presentNode[1]),
+        #             (plotPoints[i][0], plotPoints[i][1]),
+        #             color=[255, 0, 0],
+        #             thickness=1,
+        #         )
+        # else:
+        #     cv2.line(
+        #                 maze,
+        #                 (plotPoints[i][0], plotPoints[i][1]),
+        #                 (plotPoints[i+1][0], plotPoints[i+1][1]),
+        #                 color=[255, 0, 0],
+        #                 thickness=1,
+        #             )
 
 
 # [cost, index, coords, c2c]
@@ -316,29 +347,26 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
     xNew = nodeCoords[0][0]
     yNew = nodeCoords[0][1]
 
-    # incrementCoords = []
-    # incrementCoords.append((xNew,yNew))
+    validPath = True
 
-    while t < 10:
+    RPS1 = ((2 * math.pi) / 60) * RPM1  # rev per mintue to rad per sec
+    RPS2 = ((2 * math.pi) / 60) * RPM2  # rev per mintue to rad per sec
+
+    incrementCoords = []
+    incrementCoords.append((xNew, yNew))
+
+    while t < 1:  # DO NOT CHANGE
         t = t + dt
 
-        deltaX = 0.5 * wheelRadius * (RPM1 + RPM2) * math.cos(thetaNew) * dt
-        xNew += deltaX
+        deltaX = 0.5 * wheelRadius * (RPS1 + RPS2) * math.cos(thetaNew) * dt
+        xNew += deltaX * 100
 
-        deltaY = 0.5 * wheelRadius * (RPM1 + RPM2) * math.sin(thetaNew) * dt
-        yNew += deltaY
+        deltaY = 0.5 * wheelRadius * (RPS1 + RPS2) * math.sin(thetaNew) * dt
+        yNew += deltaY * 100
 
-        # incrementCoords.append((xNew,yNew))
+        incrementCoords.append((xNew, yNew))
 
-        deltaTheta = (
-            (wheelRadius / wheelBase)
-            * ((2 * math.pi / 60) * RPM2 - (2 * math.pi / 60) * RPM1)
-            * dt
-        )
-        # print(wheelRadius/wheelBase)
-        # print(RPM1, type(RPM1))
-        # print(RPM2, type(RPM2))
-        # print(RPM2-RPM1)
+        deltaTheta = (wheelRadius / wheelBase) * (RPS2 - RPS1) * dt
         # print((((2*math.pi)/60)*RPM2 - ((2*math.pi)/60)*RPM1))
         thetaNew += deltaTheta
 
@@ -348,12 +376,23 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
         step += math.sqrt(math.pow(deltaX, 2) + math.pow(deltaY, 2))
 
     thetaNew = 180 * (thetaNew) / math.pi
-    # print("New final orientation: ", xNew, yNew, normalizeAngle(thetaNew))
-    # print("Substeps:", incrementCoords)
-    # input("Continue? /")
+    #print("New final orientation: ", xNew, yNew, normalizeAngle(thetaNew))
+    #print("Substeps:", incrementCoords)
 
-    if checkObstacle((round(xNew), round(yNew)), maze) == False:
-        # plotPoints = #getPlotPoints(xListofTen, YListofTen)
+    plotPoints = getPlotPoints(incrementCoords)
+    #print("Rounded points: ", plotPoints)
+
+    for i in plotPoints:
+        # print("Current rounded coordinate to check: ", i)
+        # print("Clearance: ", clearance)
+        # print("Is path valid now? ", validPath)
+        # print("Current value of maze at point:", blankMaze[i[1], i[0]])
+        if checkObstacle((i[0], i[1]), blankMaze) == True:
+            validPath = False #CHANGE ME
+
+    # input("Continue? /n")
+
+    if validPath == True:
         # [cost, index, coords, c2c, step]
         newNode = [
             None,
@@ -362,7 +401,8 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
             None,
             step,
         ]
-        return newNode  # , plotPoints
+        plotTrajectory(nodeCoords[0], plotPoints, maze)
+        return newNode
     else:
         print("Obstacle detected for this trajectory")
         return None
@@ -408,23 +448,27 @@ def searchNode(nodeCoords, RPM1, RPM2, maze):
 def generatePath(nodeIndex, nodeCoords, maze):
     pathIndices = []
     pathCoords = []
+    nodeCoords = nodeCoords[0]
+    counta = 0
 
     while nodeIndex is not None:
         pathIndices.append(nodeIndex)
         pathCoords.append(nodeCoords)
-        tempX = int(nodeCoords[0][0])
-        tempY = int(nodeCoords[0][1])
+        tempX = int(nodeCoords[0])
+        tempY = int(nodeCoords[1])
         cv2.circle(maze, (tempX, tempY), 5, color=(0, 255, 255), thickness=-1)
         nodeCoords = coordDict[nodeIndex]
         nodeIndex = parentDict[nodeIndex]
+        counta += 1
+        print(counta)
 
     return pathIndices, pathCoords
 
 
 def simulateBot(pathCoords, emptyMaze, clearance):
     for i in pathCoords:
-        tempX = int(i[0][0])
-        tempY = int(i[0][1])
+        tempX = int(i[0])
+        tempY = int(i[1])
         cv2.circle(emptyMaze, (tempX, tempY), 3, color=(0, 255, 255), thickness=-1)
         outVid.write(cv2.flip(emptyMaze, 0))
 
@@ -432,12 +476,12 @@ def simulateBot(pathCoords, emptyMaze, clearance):
 
     for i in pathCoords:
         emptyMazeCopy = emptyMaze.copy()
-        tempXR = int(i[0][0])
-        tempYR = int(i[0][1])
+        tempXR = int(i[0])
+        tempYR = int(i[0])
         currCirc = cv2.circle(
             emptyMazeCopy,
             (tempXR, tempYR),
-            2 * clearance,
+            clearance,
             color=(255, 0, 255),
             thickness=-1,
         )
@@ -458,8 +502,8 @@ outVid = cv2.VideoWriter("output.mp4", fourcc, 30, (600, 250))
 turtlebot3Radius = 0.105  # [m]
 wheelRadius = 0.033  # [m]
 wheelBase = 0.160  # [m]
-dt = 1
-goalThresh = 1.5
+dt = 0.1  # DO NOT CHANGE
+goalThresh = 5
 
 # get obstacle clearance
 clearance = getValidClearance(turtlebot3Radius)
@@ -490,7 +534,7 @@ openSet = set()
 
 # intialize data containers for backtracking
 parentDict = {1: None}
-coordDict = {1: start}
+coordDict = {1: start[0]}
 costDict = {1: 0}
 c2cDict = {1: 0}
 closedSet = set()
@@ -499,35 +543,35 @@ closedList = []
 # [cost, index, coords/theta, c2c]
 startNode = [0, 1, start, 0]
 index = startNode[1]
-# print(startNode)
 openList.put(startNode)
 openSet.add(start[0])
-print(openSet)
-# print(openList)
 
 while not openList.empty() and solved == False:
     first = openList.get()
+    openSet.remove(first[2][0])
+    print()
     print("Current Node: ", first)
-    # print(openList)
-    # print(openSet)
-    # print(first[2][0])
-    try:
-    # openSet.add(first[2][0])
-    # if (first[2][0]) in openSet:
-        openSet.remove(first[2][0])
-    except KeyError:
-        print(f"Key {first[2][0]} not found in openSet")
+    # print("Current Open List: ", openList)
+    # print("Current Open Set: ", openSet)
+    print()
+
+    # try:
+    #     # openSet.add(first[2][0])
+    #     # if (first[2][0]) in openSet:
+    #     openSet.remove(first[2][0])
+    # except KeyError:
+    #     print(f"Key {first[2][0]} not found in openSet")
 
     closedSet.add(first[2][0])
-    # print(closedSet)
+    # print("Current closed set: ", closedSet)
     closedList.append(first[2][0])
-    # print(closedList)
-    # print(closedList)
+    # print("Current closed set:", closedList)
+    # print()
 
     if euclideanCostToGo(first[2][0], goal[0]) <= goalThresh:
         elapsedTime = time.time() - startTime
         print("Yay! Goal node located... Operation took ", elapsedTime, " seconds.")
-        # print("Current node index: ", first[1], " and cost: ", round(first[3],2), "\n")
+        print("Current node index: ", first[1], " and cost: ", round(first[3], 2), "\n")
         solved = True
 
         dispMaze = maze.copy()
@@ -546,31 +590,28 @@ while not openList.empty() and solved == False:
         break
 
     results = searchNode(first[2], RPM1, RPM2, maze)
-    # print (results)
+    # print("Results of searching current node: ", results)
+
     for i in results:
-        if not i[2] in closedSet:
-            if not i[2] in openSet:
+        if not i[2][0] in closedSet:
+            if not i[2][0] in openSet:
                 index += 1
                 i[1] = index
                 i[3] = first[3] + i[4]
                 i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0])
-                # print(i[0])
 
                 parentDict[i[1]] = first[1]
-                coordDict[i[1]] = i[2]
+                coordDict[i[1]] = i[2][0]
                 costDict[i[1]] = i[0]
                 c2cDict[i[1]] = i[3]
 
                 openList.put(i)
-                # print(i)
                 openSet.add(i[2][0])
-                # print(i[2][0])
-
                 cv2.line(
                     maze,
                     (int(first[2][0][0]), int(first[2][0][1])),
                     (int(i[2][0][0]), int(i[2][0][1])),
-                    color=[255, 0, 0],
+                    color=[130, 23, 101],
                     thickness=1,
                 )
 
@@ -578,10 +619,14 @@ while not openList.empty() and solved == False:
                 if counter >= 50:
                     outVid.write(cv2.flip(maze, 0))
                     counter = 0
-
+            
         else:
             print("Gotcha, ", i)
-            tempIndex = {j for j in coordDict if coordDict[j] == i[2]}
+            # print("Closed Set: ", closedSet)
+            # print()
+            # print("Coord Dict: ", coordDict)
+            # print()
+            tempIndex = {j for j in coordDict if coordDict[j] == i[2][0]}
             tempIndex = tempIndex.pop()
             if costDict[tempIndex] > first[3] + i[4]:
                 parentDict[tempIndex] = first[1]
@@ -590,7 +635,7 @@ while not openList.empty() and solved == False:
                     first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])
                 )
 
-#     # input("Progress to next node?")
+    # input("Progress to next node?")
 
 if solved == False:
     print("Failure! Goal node not found")
@@ -618,3 +663,6 @@ while cap.isOpened():
 cap.release()
 print("Video displayed successfully! Program termination  \n")
 cv2.destroyAllWindows()
+
+# Resources:
+# https://www.geeksforgeeks.org/python-get-unique-values-list/

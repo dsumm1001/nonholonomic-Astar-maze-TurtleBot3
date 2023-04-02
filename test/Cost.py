@@ -27,7 +27,7 @@ def cost(Xi,Yi,Thetai,UL,UR):
     return Xn, Yn, Thetan, D
     
 
-actions=[[5,5], [10,10],[5,0],[0,5],[5,10],[10,5]]
+actions=[[50,50], [100,100],[50,100],[100,50],[50,100],[100,50]]
         
 for action in actions:
      k=cost(0,0,45, action[0],action[1])      # (0,0,45) hypothetical start configuration, this dosn't matter for calucating the edges'costs
