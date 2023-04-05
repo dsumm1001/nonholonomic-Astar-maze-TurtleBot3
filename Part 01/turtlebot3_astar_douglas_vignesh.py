@@ -581,7 +581,7 @@ while not openList.empty() and solved == False:
                 index += 1
                 i[1] = index
                 i[3] = first[3] + i[4]
-                i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0]) # weighted by one
+                i[0] = i[3] + 2 * euclideanCostToGo(i[2][0], goal[0]) # weighted by one
 
                 parentDict[i[1]] = first[1]
                 coordDict[i[1]] = i[2][0]
@@ -604,7 +604,7 @@ while not openList.empty() and solved == False:
                 parentDict[tempIndex] = first[1]
                 c2cDict[tempIndex] = first[3] + i[4]
                 costDict[tempIndex] = (
-                    first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])  # weighted by one
+                    first[3] + i[4] + 2 * euclideanCostToGo(i[2][0], goal[0])  # weighted by one
                 )
 
     # input("Progress to next node?")
