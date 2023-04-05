@@ -25,6 +25,10 @@ devel_isolated/
 *.dox
 *.wikidoc
 
+# Ignore generated videos
+*.mp4
+*.avi
+
 # eclipse stuff
 .project
 .cproject
