@@ -361,7 +361,7 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
         # print("xNew, yNew, thetaNew: ", xNew, yNew, thetaNew)
         # print("deltaX, deltaY, deltaTheta: ", deltaX, deltaY, deltaTheta)
 
-        step += math.sqrt(math.pow(deltaX, 2) + math.pow(deltaY, 2))
+        step += math.sqrt(math.pow(deltaX*100, 2) + math.pow(deltaY*100, 2))
 
     thetaNew = 180 * (thetaNew) / math.pi
     #print("New final orientation: ", xNew, yNew, normalizeAngle(thetaNew))
@@ -390,14 +390,15 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
             step,
         ]
         plotTrajectory(nodeCoords[0], plotPoints, maze)
+
         intermediateMaze = cv2.flip(maze, 0)
-        # while True:
-        #     cv2.imshow("Maze", intermediateMaze)
-        #     key = cv2.waitKey(1) & 0xFF
-        #     # If the 'q' key is pressed, quit the loop
-        #     if key == ord("q"):
-        #         break
-        #     break
+        while True:
+            cv2.imshow("Maze", intermediateMaze)
+            key = cv2.waitKey(1) & 0xFF
+            # If the 'q' key is pressed, quit the loop
+            if key == ord("q"):
+                break
+            break
 
         return newNode
     else:
@@ -583,9 +584,9 @@ while not openList.empty() and solved == False:
     first = openList.get()
     openSet.remove(first[2][0])
 
-    print()
-    print("Current Node: ", first)
-    print()
+    # print()
+    # print("Current Node: ", first)
+    # print()
 
     closedSet.add(first[2][0])
     closedList.append(first[2][0])
@@ -615,15 +616,15 @@ while not openList.empty() and solved == False:
     # print("Results of searching current node: ", results)
 
     for i in results:
-        print("Current result: ", i)
+        #print("Current result: ", i)
         if not i[2][0] in closedSet:
-            print("Not in closed set...")
+            #print("Not in closed set...")
             if not i[2][0] in openSet:
-                print("not in open set either...")
+                #print("not in open set either...")
                 index += 1
                 i[1] = index
                 i[3] = first[3] + i[4]
-                i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0])
+                i[0] = i[3] + 2*euclideanCostToGo(i[2][0], goal[0]) # weighted by two
 
                 parentDict[i[1]] = first[1]
                 coordDict[i[1]] = i[2][0]
@@ -633,37 +634,26 @@ while not openList.empty() and solved == False:
                 openList.put(i)
                 openSet.add(i[2][0])
 
-                # cv2.line(
-                #     maze,
-                #     (int(first[2][0][0]), int(first[2][0][1])),
-                #     (int(i[2][0][0]), int(i[2][0][1])),
-                #     color=[130, 23, 101],
-                #     thickness=1,
-                # )
-
                 counter += 1
                 if counter >= 50:
                     outVid.write(cv2.flip(maze, 0))
                     counter = 0
-            
+    
         else:
-            print("Gotcha, ", i, i[2][0])
+            #print("Gotcha, ", i, i[2][0])
             # print("OpenSet: ", openSet)
             # print()
             # print("ClosedSet: ", closedSet)
             tempIndex = {j for j in coordDict if coordDict[j] == i[2][0]}
             tempIndex = tempIndex.pop()
-            print(tempIndex, costDict[tempIndex], first[3] + i[4], euclideanCostToGo(first[2][0], goal[0]), parentDict[tempIndex])
+            #print(tempIndex, costDict[tempIndex], first[3] + i[4], euclideanCostToGo(first[2][0], goal[0]), parentDict[tempIndex])
             #input()
-            # if costDict[tempIndex] > first[3] + i[4]:
-            #     parentDict[tempIndex] = first[1]
-            #     c2cDict[tempIndex] = first[3] + i[4]
-            #     costDict[tempIndex] = (
-            #         first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])
-            #     )
-            #     i[1] = index
-            #     i[3] = first[3] + i[4]
-            #     i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0])
+            if costDict[tempIndex] > first[3] + i[4]:
+                parentDict[tempIndex] = first[1]
+                c2cDict[tempIndex] = first[3] + i[4]
+                costDict[tempIndex] = (
+                    first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])
+                )
 
     # input("Progress to next node?")
 
