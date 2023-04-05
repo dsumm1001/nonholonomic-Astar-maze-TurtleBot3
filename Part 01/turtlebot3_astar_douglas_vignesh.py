@@ -37,7 +37,7 @@ def getValidRPMs(rpmThresh):
                 + " , separated by a comma: "
             )
             rpms = tuple(int(item) for item in rpmInput.split(","))
-        except ValueError:
+        except (IndexError, ValueError):
             print(
                 "Sorry, results invalid. Please try again, entering the wheel RPMs as integer values between "
                 + str(rpmThresh[0])
@@ -77,7 +77,7 @@ def getValidClearance(robotRadius):
                     + " and 120 [mm]: "
                 )
             )
-        except ValueError:
+        except (IndexError, ValueError):
             print(
                 "Sorry, results invalid. Please try again, entering the desired obstacle clearance as an integer value between "
                 + str(robotRadius * 1000)
@@ -108,20 +108,26 @@ def getValidCoords(type, maze, clearance):
                 + " node coordinates in x, y format, in [cm], separated by a comma: "
             )
             coords = tuple(int(item) for item in coordInput.split(","))
-        except ValueError:
+        except (IndexError, ValueError):
             print(
                 "Sorry, results invalid. Please try again, entering two integer inputs within the maze space. "
             )
             continue
-        if (
-            coords[0] < 0 + clearance
-            or coords[0] > 600 - clearance
-            or coords[1] < 0 + clearance
-            or coords[1] > 250 - clearance
-        ):
+        try:
+            if (
+                coords[0] < 0 + clearance
+                or coords[0] > 600 - clearance
+                or coords[1] < 0 + clearance
+                or coords[1] > 250 - clearance
+            ):
+                print(
+                    "Sorry, results invalid. Please try again, entering two integer inputs within the maze space. "
+                )
+                continue
+        except (IndexError, ValueError):
             print(
-                "Sorry, results invalid. Please try again, entering two integer inputs within the maze space. "
-            )
+                    "Sorry, results invalid. Please try again, entering two integer inputs within the maze space. "
+                )
             continue
         if all(maze[(int(coords[1]), int(coords[0]))] == [255, 255, 255]) == False:
             print(
@@ -142,7 +148,7 @@ def getValidCoords(type, maze, clearance):
             )
             if theta >= 360 or theta < 0:
                 raise ValueError
-        except ValueError:
+        except (IndexError, ValueError):
             print(
                 (
                     "Sorry, entry invalid. Please try again, entering an integer input between 0-359 in increments of 1 deg. "
@@ -321,23 +327,6 @@ def plotTrajectory(presentNode, plotPoints, maze):
             thickness=1,
         )
 
-        # if i == 0:
-        #     cv2.line(
-        #             maze,
-        #             (presentNode[0], presentNode[1]),
-        #             (plotPoints[i][0], plotPoints[i][1]),
-        #             color=[255, 0, 0],
-        #             thickness=1,
-        #         )
-        # else:
-        #     cv2.line(
-        #                 maze,
-        #                 (plotPoints[i][0], plotPoints[i][1]),
-        #                 (plotPoints[i+1][0], plotPoints[i+1][1]),
-        #                 color=[255, 0, 0],
-        #                 thickness=1,
-        #             )
-
 
 # [cost, index, coords, c2c]
 def actionCost(nodeCoords, RPM1, RPM2, maze):
@@ -367,7 +356,6 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
         incrementCoords.append((xNew, yNew))
 
         deltaTheta = (wheelRadius / wheelBase) * (RPS2 - RPS1) * dt
-        # print((((2*math.pi)/60)*RPM2 - ((2*math.pi)/60)*RPM1))
         thetaNew += deltaTheta
 
         # print("xNew, yNew, thetaNew: ", xNew, yNew, thetaNew)
@@ -402,9 +390,18 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
             step,
         ]
         plotTrajectory(nodeCoords[0], plotPoints, maze)
+        intermediateMaze = cv2.flip(maze, 0)
+        # while True:
+        #     cv2.imshow("Maze", intermediateMaze)
+        #     key = cv2.waitKey(1) & 0xFF
+        #     # If the 'q' key is pressed, quit the loop
+        #     if key == ord("q"):
+        #         break
+        #     break
+
         return newNode
     else:
-        print("Obstacle detected for this trajectory")
+        #print("Obstacle detected for this trajectory")
         return None
 
 
@@ -450,46 +447,81 @@ def generatePath(nodeIndex, nodeCoords, maze):
     pathCoords = []
     nodeCoords = nodeCoords[0]
     counta = 0
+    tencounta = 0
+
+    print("Index: ", index)
+    print("Elements in parent dict: ", len(parentDict))
+    print("Elements in coord dict: ", len(coordDict))
+    #print("Coord dict: ", coordDict)
+
+    seenvalues = set()
+    duplicates = set()
+
+    for value in coordDict.values():
+        if value in seenvalues:
+            duplicates.add(value)
+        else:
+            seenvalues.add(value)
+
+    print("Duplicates :", duplicates)
+
+    input("Continue? \n")
 
     while nodeIndex is not None:
         pathIndices.append(nodeIndex)
         pathCoords.append(nodeCoords)
+        print("Next coords: ", nodeCoords)
+        print("Next Index: ", nodeIndex)
         tempX = int(nodeCoords[0])
         tempY = int(nodeCoords[1])
         cv2.circle(maze, (tempX, tempY), 5, color=(0, 255, 255), thickness=-1)
         nodeCoords = coordDict[nodeIndex]
         nodeIndex = parentDict[nodeIndex]
+        tencounta += 1
         counta += 1
         print(counta)
+        print(pathCoords)
+        print(pathIndices)
+        if tencounta == 10:
+            #input("Continue? \n")
+            tencounta = 0
 
+    print(pathCoords)
     return pathIndices, pathCoords
 
 
 def simulateBot(pathCoords, emptyMaze, clearance):
+    timer = 5
     for i in pathCoords:
         tempX = int(i[0])
         tempY = int(i[1])
         cv2.circle(emptyMaze, (tempX, tempY), 3, color=(0, 255, 255), thickness=-1)
-        outVid.write(cv2.flip(emptyMaze, 0))
+        while timer > 0:
+            outVid.write(cv2.flip(emptyMaze, 0))
+            timer = timer - 1
 
     pathCoords.reverse()
 
     for i in pathCoords:
         emptyMazeCopy = emptyMaze.copy()
-        tempXR = int(i[0])
-        tempYR = int(i[0])
+        tempXR = i[0]
+        tempYR = i[1]
         currCirc = cv2.circle(
             emptyMazeCopy,
             (tempXR, tempYR),
-            clearance,
+            int(round(turtlebot3Radius*100)),
             color=(255, 0, 255),
             thickness=-1,
         )
-        outVid.write(cv2.flip(currCirc, 0))
 
-    index = 30
-    while index >= 0:
-        index -= 1
+        timer = 10
+        while timer > 0:
+            outVid.write(cv2.flip(currCirc, 0))
+            timer = timer - 1
+
+    timer = 60
+    while timer >= 0:
+        timer -= 1
         outVid.write(cv2.flip(currCirc, 0))
 
 
@@ -503,7 +535,7 @@ turtlebot3Radius = 0.105  # [m]
 wheelRadius = 0.033  # [m]
 wheelBase = 0.160  # [m]
 dt = 0.1  # DO NOT CHANGE
-goalThresh = 5
+goalThresh = 10
 
 # get obstacle clearance
 clearance = getValidClearance(turtlebot3Radius)
@@ -533,6 +565,7 @@ openList = PriorityQueue()
 openSet = set()
 
 # intialize data containers for backtracking
+
 parentDict = {1: None}
 coordDict = {1: start[0]}
 costDict = {1: 0}
@@ -541,7 +574,7 @@ closedSet = set()
 closedList = []
 
 # [cost, index, coords/theta, c2c]
-startNode = [0, 1, start, 0]
+startNode = [0, 1, start, 0, 0]
 index = startNode[1]
 openList.put(startNode)
 openSet.add(start[0])
@@ -549,24 +582,13 @@ openSet.add(start[0])
 while not openList.empty() and solved == False:
     first = openList.get()
     openSet.remove(first[2][0])
+
     print()
     print("Current Node: ", first)
-    # print("Current Open List: ", openList)
-    # print("Current Open Set: ", openSet)
     print()
 
-    # try:
-    #     # openSet.add(first[2][0])
-    #     # if (first[2][0]) in openSet:
-    #     openSet.remove(first[2][0])
-    # except KeyError:
-    #     print(f"Key {first[2][0]} not found in openSet")
-
     closedSet.add(first[2][0])
-    # print("Current closed set: ", closedSet)
     closedList.append(first[2][0])
-    # print("Current closed set:", closedList)
-    # print()
 
     if euclideanCostToGo(first[2][0], goal[0]) <= goalThresh:
         elapsedTime = time.time() - startTime
@@ -593,8 +615,11 @@ while not openList.empty() and solved == False:
     # print("Results of searching current node: ", results)
 
     for i in results:
+        print("Current result: ", i)
         if not i[2][0] in closedSet:
+            print("Not in closed set...")
             if not i[2][0] in openSet:
+                print("not in open set either...")
                 index += 1
                 i[1] = index
                 i[3] = first[3] + i[4]
@@ -607,13 +632,14 @@ while not openList.empty() and solved == False:
 
                 openList.put(i)
                 openSet.add(i[2][0])
-                cv2.line(
-                    maze,
-                    (int(first[2][0][0]), int(first[2][0][1])),
-                    (int(i[2][0][0]), int(i[2][0][1])),
-                    color=[130, 23, 101],
-                    thickness=1,
-                )
+
+                # cv2.line(
+                #     maze,
+                #     (int(first[2][0][0]), int(first[2][0][1])),
+                #     (int(i[2][0][0]), int(i[2][0][1])),
+                #     color=[130, 23, 101],
+                #     thickness=1,
+                # )
 
                 counter += 1
                 if counter >= 50:
@@ -621,19 +647,23 @@ while not openList.empty() and solved == False:
                     counter = 0
             
         else:
-            print("Gotcha, ", i)
-            # print("Closed Set: ", closedSet)
+            print("Gotcha, ", i, i[2][0])
+            # print("OpenSet: ", openSet)
             # print()
-            # print("Coord Dict: ", coordDict)
-            # print()
+            # print("ClosedSet: ", closedSet)
             tempIndex = {j for j in coordDict if coordDict[j] == i[2][0]}
             tempIndex = tempIndex.pop()
-            if costDict[tempIndex] > first[3] + i[4]:
-                parentDict[tempIndex] = first[1]
-                c2cDict[tempIndex] = first[3] + i[4]
-                costDict[tempIndex] = (
-                    first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])
-                )
+            print(tempIndex, costDict[tempIndex], first[3] + i[4], euclideanCostToGo(first[2][0], goal[0]), parentDict[tempIndex])
+            #input()
+            # if costDict[tempIndex] > first[3] + i[4]:
+            #     parentDict[tempIndex] = first[1]
+            #     c2cDict[tempIndex] = first[3] + i[4]
+            #     costDict[tempIndex] = (
+            #         first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])
+            #     )
+            #     i[1] = index
+            #     i[3] = first[3] + i[4]
+            #     i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0])
 
     # input("Progress to next node?")
 
@@ -666,3 +696,6 @@ cv2.destroyAllWindows()
 
 # Resources:
 # https://www.geeksforgeeks.org/python-get-unique-values-list/
+# https://stackoverflow.com/questions/480214/how-do-i-remove-duplicates-from-a-list-while-preserving-order
+# https://emanual.robotis.com/docs/en/platform/turtlebot3/features/#:~:text=The%20dimension%20of%20TurtleBot3%20Burger,L%20x%20W%20x%20H).
+
