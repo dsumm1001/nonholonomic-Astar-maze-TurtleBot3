@@ -332,6 +332,7 @@ def plotTrajectory(presentNode, plotPoints, maze):
 def actionCost(nodeCoords, RPM1, RPM2, maze):
     t = 0
     step = 0
+
     thetaNew = math.pi * nodeCoords[1] / 180  # converts deg to rad
     xNew = nodeCoords[0][0]
     yNew = nodeCoords[0][1]
@@ -349,36 +350,22 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
 
         deltaX = 0.5 * wheelRadius * (RPS1 + RPS2) * math.cos(thetaNew) * dt
         xNew += deltaX * 100
-
         deltaY = 0.5 * wheelRadius * (RPS1 + RPS2) * math.sin(thetaNew) * dt
         yNew += deltaY * 100
-
         incrementCoords.append((xNew, yNew))
 
         deltaTheta = (wheelRadius / wheelBase) * (RPS2 - RPS1) * dt
         thetaNew += deltaTheta
 
-        # print("xNew, yNew, thetaNew: ", xNew, yNew, thetaNew)
-        # print("deltaX, deltaY, deltaTheta: ", deltaX, deltaY, deltaTheta)
-
         step += math.sqrt(math.pow(deltaX*100, 2) + math.pow(deltaY*100, 2))
 
     thetaNew = 180 * (thetaNew) / math.pi
-    #print("New final orientation: ", xNew, yNew, normalizeAngle(thetaNew))
-    #print("Substeps:", incrementCoords)
 
     plotPoints = getPlotPoints(incrementCoords)
-    #print("Rounded points: ", plotPoints)
 
     for i in plotPoints:
-        # print("Current rounded coordinate to check: ", i)
-        # print("Clearance: ", clearance)
-        # print("Is path valid now? ", validPath)
-        # print("Current value of maze at point:", blankMaze[i[1], i[0]])
         if checkObstacle((i[0], i[1]), blankMaze) == True:
-            validPath = False #CHANGE ME
-
-    # input("Continue? /n")
+            validPath = False
 
     if validPath == True:
         # [cost, index, coords, c2c, step]
@@ -391,6 +378,7 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
         ]
         plotTrajectory(nodeCoords[0], plotPoints, maze)
 
+        # Realtime livestream of search
         intermediateMaze = cv2.flip(maze, 0)
         while True:
             cv2.imshow("Maze", intermediateMaze)
@@ -402,7 +390,6 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
 
         return newNode
     else:
-        #print("Obstacle detected for this trajectory")
         return None
 
 
@@ -448,45 +435,21 @@ def generatePath(nodeIndex, nodeCoords, maze):
     pathCoords = []
     nodeCoords = nodeCoords[0]
     counta = 0
-    tencounta = 0
 
-    print("Index: ", index)
     print("Elements in parent dict: ", len(parentDict))
     print("Elements in coord dict: ", len(coordDict))
-    #print("Coord dict: ", coordDict)
-
-    seenvalues = set()
-    duplicates = set()
-
-    for value in coordDict.values():
-        if value in seenvalues:
-            duplicates.add(value)
-        else:
-            seenvalues.add(value)
-
-    print("Duplicates :", duplicates)
-    input("Continue? \n")
 
     while nodeIndex is not None:
         pathIndices.append(nodeIndex)
         pathCoords.append(nodeCoords)
-        print("Next coords: ", nodeCoords)
-        print("Next Index: ", nodeIndex)
         tempX = int(nodeCoords[0])
         tempY = int(nodeCoords[1])
         cv2.circle(maze, (tempX, tempY), 5, color=(0, 255, 255), thickness=-1)
         nodeCoords = coordDict[nodeIndex]
         nodeIndex = parentDict[nodeIndex]
-        tencounta += 1
         counta += 1
-        print(counta)
-        print(pathCoords)
-        print(pathIndices)
-        if tencounta == 10:
-            input("Continue? \n")
-            tencounta = 0
+        print("Nodes in path: ", counta)
 
-    # print(pathCoords)
     return pathIndices, pathCoords
 
 
@@ -583,9 +546,9 @@ while not openList.empty() and solved == False:
     first = openList.get()
     openSet.remove(first[2][0])
 
-    print()
-    print("Current Node: ", first)
-    print()
+    # print()
+    # print("Current Node: ", first)
+    # print()
 
     closedSet.add(first[2][0])
     closedList.append(first[2][0])
@@ -613,13 +576,12 @@ while not openList.empty() and solved == False:
     results = searchNode(first[2], RPM1, RPM2, maze)
 
     for i in results:
-        print("Current result: ", i)
         if not i[2][0] in closedSet:
             if not i[2][0] in openSet:
                 index += 1
                 i[1] = index
                 i[3] = first[3] + i[4]
-                i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0]) # weighted by two
+                i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0]) # weighted by one
 
                 parentDict[i[1]] = first[1]
                 coordDict[i[1]] = i[2][0]
@@ -635,19 +597,14 @@ while not openList.empty() and solved == False:
                     counter = 0
     
         else:
-            print("Gotcha, ", i)
-            # print("OpenSet: ", openSet)
-            # print()
-            # print("ClosedSet: ", closedSet)
             tempIndex = {j for j in coordDict if coordDict[j] == i[2][0]}
             tempIndex = tempIndex.pop()
-            print(tempIndex, costDict[tempIndex], first[3] + i[4], euclideanCostToGo(first[2][0], goal[0]), parentDict[tempIndex])
-            #input()
-            if costDict[tempIndex] > first[3] + i[4]:
+
+            if c2cDict[tempIndex] > first[3] + i[4]:
                 parentDict[tempIndex] = first[1]
                 c2cDict[tempIndex] = first[3] + i[4]
                 costDict[tempIndex] = (
-                    first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])  # weighted by two
+                    first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])  # weighted by one
                 )
 
     # input("Progress to next node?")
@@ -664,7 +621,6 @@ cap = cv2.VideoCapture("output.mp4")
 
 if cap.isOpened() == False:
     print("Error File Not Found")
-
 
 while cap.isOpened():
     ret, frame = cap.read()
