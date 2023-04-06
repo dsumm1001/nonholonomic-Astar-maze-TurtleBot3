@@ -16,6 +16,10 @@
 # Results link:
 # Press CTRL+C for exit
 
+#! /usr/bin/env python
+import rospy
+from geometry_msgs.msg import Twist
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -24,20 +28,12 @@ from queue import PriorityQueue
 import time
 import sys
 from collections import OrderedDict
-import rospy
-from geometry_msgs.msg import Twist
+import tf.transformations as tf
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelState
+from geometry_msgs.msg import Pose, Quaternion
 
-def test(node):
-    rospy.init_node('turtle_bot3', anonymous=True)
-    pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-    msg = Twist()
-    while not rospy.is_shutdown():
-        for i in node:
-            msg.linear.x = i[0]
-            msg.angular.z = i[1]
-            pub.publish(msg)
-            time.sleep(0.1)
-		
+
 def getValidRPMs(rpmThresh):
     while True:
         try:
@@ -86,21 +82,21 @@ def getValidClearance(robotRadius):
                 input(
                     "Please enter the desired obstacle clearance as an integer value between "
                     + str(robotRadius * 1000)
-                    + " and 120 [mm]: "
+                    + " and 250 [mm]: "
                 )
             )
         except (IndexError, ValueError):
             print(
                 "Sorry, results invalid. Please try again, entering the desired obstacle clearance as an integer value between "
                 + str(robotRadius * 1000)
-                + " and 120 [mm]: "
+                + " and 250 [mm]: "
             )
             continue
-        if clearance < robotRadius * 1000 or clearance >= 130:
+        if clearance < robotRadius * 1000 or clearance > 250:
             print(
                 "Sorry, results invalid. Please try again, entering the desired obstacle clearance as an integer value between "
                 + str(robotRadius * 1000)
-                + " and 120 [mm]: "
+                + " and 250 [mm]: "
             )
             continue
         else:
@@ -130,7 +126,7 @@ def getValidCoords(type, maze, clearance):
                 coords[0] < 0 + clearance
                 or coords[0] > 600 - clearance
                 or coords[1] < 0 + clearance
-                or coords[1] > 250 - clearance
+                or coords[1] > 200 - clearance
             ):
                 print(
                     "Sorry, results invalid. Please try again, entering two integer inputs within the maze space. "
@@ -138,8 +134,8 @@ def getValidCoords(type, maze, clearance):
                 continue
         except (IndexError, ValueError):
             print(
-                    "Sorry, results invalid. Please try again, entering two integer inputs within the maze space. "
-                )
+                "Sorry, results invalid. Please try again, entering two integer inputs within the maze space. "
+            )
             continue
         if all(maze[(int(coords[1]), int(coords[0]))] == [255, 255, 255]) == False:
             print(
@@ -188,12 +184,11 @@ def euclideanCostToGo(curr, goal):
 
 def drawMaze(clearance):
     mazeSize = (200, 600)
-    
+
     # Create blank maze
     maze = np.zeros((mazeSize[0], mazeSize[1], 3), dtype=np.uint8)
     maze[:] = (0, 255, 0)
 
-    # Draw rectangular obstacles
     cv2.rectangle(
         maze,
         pt1=(clearance, clearance),
@@ -202,9 +197,10 @@ def drawMaze(clearance):
         thickness=-1,
     )
 
+    # Draw rectangular obstacles
     cv2.rectangle(
         maze,
-        pt1=(150 - clearance, 75 -clearance),
+        pt1=(150 - clearance, 75 - clearance),
         pt2=(165 + clearance, mazeSize[0] + clearance),
         color=(0, 255, 0),
         thickness=-1,
@@ -218,15 +214,16 @@ def drawMaze(clearance):
         thickness=-1,
     )
 
-    cv2.rectangle(maze, pt1=(150, 75), pt2=(165, mazeSize[0]), color=(0, 0, 255), thickness=-1)
     cv2.rectangle(
-        maze, pt1=(235, 0), pt2=(250, 125), color=(0, 0, 255), thickness=-1
+        maze, pt1=(150, 75), pt2=(165, mazeSize[0]), color=(0, 0, 255), thickness=-1
     )
+    cv2.rectangle(maze, pt1=(235, 0), pt2=(250, 125), color=(0, 0, 255), thickness=-1)
 
     # Draw circular obstacles
-    cv2.circle(maze, (400, 90 ), (50 + clearance), color=(0, 255, 0), thickness=-1)
-    cv2.circle(maze, (400, 90), 50, color=(0, 0, 255), thickness=-1)
+    cv2.circle(maze, (400, 110), (50 + clearance), color=(0, 255, 0), thickness=-1)
+    cv2.circle(maze, (400, 110), 50, color=(0, 0, 255), thickness=-1)
     return maze
+
 
 def checkObstacle(xyCoords, maze):
     try:
@@ -264,6 +261,7 @@ def plotTrajectory(presentNode, plotPoints, maze):
 def actionCost(nodeCoords, RPM1, RPM2, maze):
     t = 0
     step = 0
+
     thetaNew = math.pi * nodeCoords[1] / 180  # converts deg to rad
     xNew = nodeCoords[0][0]
     yNew = nodeCoords[0][1]
@@ -275,42 +273,31 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
 
     incrementCoords = []
     incrementCoords.append((xNew, yNew))
+    velSteps = []
 
-    while t < 1:  # DO NOT CHANGE
+    while round(t,1) < 1:  # DO NOT CHANGE
         t = t + dt
 
-        deltaX = 0.5 * wheelRadius * (RPS1 + RPS2) * math.cos(thetaNew) * dt
-        xNew += deltaX * 100
-
-        deltaY = 0.5 * wheelRadius * (RPS1 + RPS2) * math.sin(thetaNew) * dt
-        yNew += deltaY * 100
-
+        deltaX = 0.5 * wheelRadius * (RPS1 + RPS2) * math.cos(thetaNew) * dt  # meters
+        xNew += deltaX * 100  # cm
+        deltaY = 0.5 * wheelRadius * (RPS1 + RPS2) * math.sin(thetaNew) * dt  # meters
+        yNew += deltaY * 100  # cm 
         incrementCoords.append((xNew, yNew))
 
-        deltaTheta = (wheelRadius / wheelBase) * (RPS2 - RPS1) * dt
+        deltaTheta = (wheelRadius / wheelBase) * (RPS2 - RPS1) * dt  # radians
         thetaNew += deltaTheta
 
-        # print("xNew, yNew, thetaNew: ", xNew, yNew, thetaNew)
-        # print("deltaX, deltaY, deltaTheta: ", deltaX, deltaY, deltaTheta)
+        step += math.sqrt(math.pow(deltaX * 100, 2) + math.pow(deltaY * 100, 2))
 
-        step += math.sqrt(math.pow(deltaX*100, 2) + math.pow(deltaY*100, 2))
+        velSteps.append((deltaX/dt, deltaY/dt, deltaTheta/dt))      #Maybe ydot times (-1)
 
     thetaNew = 180 * (thetaNew) / math.pi
-    #print("New final orientation: ", xNew, yNew, normalizeAngle(thetaNew))
-    #print("Substeps:", incrementCoords)
 
     plotPoints = getPlotPoints(incrementCoords)
-    #print("Rounded points: ", plotPoints)
 
     for i in plotPoints:
-        # print("Current rounded coordinate to check: ", i)
-        # print("Clearance: ", clearance)
-        # print("Is path valid now? ", validPath)
-        # print("Current value of maze at point:", blankMaze[i[1], i[0]])
         if checkObstacle((i[0], i[1]), blankMaze) == True:
-            validPath = False #CHANGE ME
-
-    # input("Continue? /n")
+            validPath = False
 
     if validPath == True:
         # [cost, index, coords, c2c, step]
@@ -320,21 +307,22 @@ def actionCost(nodeCoords, RPM1, RPM2, maze):
             ((round(xNew), round(yNew)), round(normalizeAngle(thetaNew))),
             None,
             step,
+            velSteps
         ]
         plotTrajectory(nodeCoords[0], plotPoints, maze)
 
-        intermediateMaze = cv2.flip(maze, 0)
-        while True:
-            cv2.imshow("Maze", intermediateMaze)
-            key = cv2.waitKey(1) & 0xFF
-            # If the 'q' key is pressed, quit the loop
-            if key == ord("q"):
-                break
-            break
+        # Realtime livestream of search
+        # intermediateMaze = cv2.flip(maze, 0)
+        # while True:
+        #     cv2.imshow("Maze", intermediateMaze)
+        #     key = cv2.waitKey(1) & 0xFF
+        #     # If the 'q' key is pressed, quit the loop
+        #     if key == ord("q"):
+        #         break
+        #     break
 
         return newNode
     else:
-        #print("Obstacle detected for this trajectory")
         return None
 
 
@@ -380,44 +368,21 @@ def generatePath(nodeIndex, nodeCoords, maze):
     pathCoords = []
     nodeCoords = nodeCoords[0]
     counta = 0
-    tencounta = 0
-    print("Index: ", index)
+
     print("Elements in parent dict: ", len(parentDict))
     print("Elements in coord dict: ", len(coordDict))
-    #print("Coord dict: ", coordDict)
-
-    seenvalues = set()
-    duplicates = set()
-
-    for value in coordDict.values():
-        if value in seenvalues:
-            duplicates.add(value)
-        else:
-            seenvalues.add(value)
-
-    print("Duplicates :", duplicates)
-    input("Continue? \n")
 
     while nodeIndex is not None:
         pathIndices.append(nodeIndex)
         pathCoords.append(nodeCoords)
-        print("Next coords: ", nodeCoords)
-        print("Next Index: ", nodeIndex)
         tempX = int(nodeCoords[0])
         tempY = int(nodeCoords[1])
         cv2.circle(maze, (tempX, tempY), 5, color=(0, 255, 255), thickness=-1)
         nodeCoords = coordDict[nodeIndex]
         nodeIndex = parentDict[nodeIndex]
-        tencounta += 1
         counta += 1
-        print(counta)
-        print(pathCoords)
-        print(pathIndices)
-        if tencounta == 10:
-            input("Continue? \n")
-            tencounta = 0
+        print("Nodes in path: ", counta)
 
-    # print(pathCoords)
     return pathIndices, pathCoords
 
 
@@ -440,7 +405,7 @@ def simulateBot(pathCoords, emptyMaze, clearance):
         currCirc = cv2.circle(
             emptyMazeCopy,
             (tempXR, tempYR),
-            int(round(turtlebot3Radius*100)),
+            int(round(turtlebot3Radius * 100)),
             color=(255, 0, 255),
             thickness=-1,
         )
@@ -456,10 +421,85 @@ def simulateBot(pathCoords, emptyMaze, clearance):
         outVid.write(cv2.flip(currCirc, 0))
 
 
+def actuateTurtlebot(pathIndices, pathCoords, startPosition):
+    pathVels = []
+    pathIndices.reverse()
+    velIndex = 0
+    print("Final path indices: ", pathIndices, "\n")
+
+    print("Getting path dynamics... \n")
+    for i in pathIndices:
+        print("Getting velocities of node: ", i)
+        vels = stepDict[i]
+        for j in vels: 
+            pathVels.append((((j[0] ** 2) + (j[1] ** 2)) ** 0.5, j[2]))
+
+    print()
+    print("Intializing ROS node... \n")
+    rospy.init_node('robot_talker', anonymous=True)
+    rate = rospy.Rate(10)  #10hz
+
+    print("Setting Turtlebot position in map...")
+
+    pubModelState = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=10)
+    rospy.wait_for_service('/gazebo/set_model_state')
+
+    try:
+        modelStateMsg = ModelState()
+        modelStateMsg.model_name = 'turtlebot3_burger'
+        modelStateMsg.pose.position.x = startPosition[0][0]/100 - 0.50
+        modelStateMsg.pose.position.y = startPosition[0][1]/100 - 1.00
+        modelStateMsg.pose.position.z = 0
+
+        roll = 0.0
+        pitch = 0.0 
+        yaw = math.pi * startPosition[1] / 180    # rotation around z-axis in RADIANS
+
+        quaternion = tf.quaternion_from_euler(roll, pitch, yaw)
+
+        modelStateMsg.pose.orientation.x = quaternion[0]
+        modelStateMsg.pose.orientation.y = quaternion[1]
+        modelStateMsg.pose.orientation.z = quaternion[2]
+        modelStateMsg.pose.orientation.w = quaternion[3]
+
+        setModelState = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
+        response = setModelState(modelStateMsg)
+
+    # catch exceptions
+    except rospy.ServiceException as e:
+        print("Service call failed: ", e)
+
+    # pub_model_state.publish(modelStateMsg)
+
+    print("Position set! \n")
+    input()
+
+    velMsg = Twist()
+    pubCmdVel = rospy.Publisher('/cmd_vel',Twist,queue_size=10)
+
+    print("Articulating Turtlebot3 in gazebo...")
+    while not rospy.is_shutdown():
+        for i in pathVels:
+            velMsg.angular.z = i[1] * 1.00
+            if (i[1] != 0):
+                velMsg.linear.x = i[0] * 1.00
+            else:
+                velMsg.linear.x = i[0] * 1.00
+            pubCmdVel.publish(velMsg)
+            rate.sleep()
+
+        velMsg.angular.z = 0
+        velMsg.linear.x = 0
+        pubCmdVel.publish(velMsg)
+        print("Finished articulating Turtlebot! Program Termination.")
+        print()
+        break
+    
+
 print("\nWelcome to the A* Maze Finder Program! \n")
 
 fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-outVid = cv2.VideoWriter("output.mp4", fourcc, 30, (600, 250))
+outVid = cv2.VideoWriter("output.mp4", fourcc, 30, (600, 200))
 
 # hardcode robot params
 turtlebot3Radius = 0.105  # [m]
@@ -486,10 +526,6 @@ RPM1, RPM2 = getValidRPMs(rpmThresh)
 # get start and goal nodes
 start = getValidCoords("start", maze, clearance)
 goal = getValidCoords("goal", maze, clearance)
-
-start[0][0] = int(rospy.get_param('~x_pos', None))
-start[0][1] = int(rospy.get_param('~y_pos', None))
-
 print()
 print("Pathfinding... \n")
 
@@ -503,6 +539,7 @@ openSet = set()
 
 parentDict = {1: None}
 coordDict = {1: start[0]}
+stepDict = {1: [(0,0,0)]}
 costDict = {1: 0}
 c2cDict = {1: 0}
 closedSet = set()
@@ -518,9 +555,9 @@ while not openList.empty() and solved == False:
     first = openList.get()
     openSet.remove(first[2][0])
 
-    print()
-    print("Current Node: ", first)
-    print()
+    # print()
+    # print("Current Node: ", first)
+    # print()
 
     closedSet.add(first[2][0])
     closedList.append(first[2][0])
@@ -548,18 +585,18 @@ while not openList.empty() and solved == False:
     results = searchNode(first[2], RPM1, RPM2, maze)
 
     for i in results:
-        print("Current result: ", i)
         if not i[2][0] in closedSet:
             if not i[2][0] in openSet:
                 index += 1
                 i[1] = index
                 i[3] = first[3] + i[4]
-                i[0] = i[3] + euclideanCostToGo(i[2][0], goal[0]) # weighted by two
+                i[0] = i[3] + 2 * euclideanCostToGo(i[2][0], goal[0])  # weighted by two
 
                 parentDict[i[1]] = first[1]
                 coordDict[i[1]] = i[2][0]
                 costDict[i[1]] = i[0]
                 c2cDict[i[1]] = i[3]
+                stepDict[i[1]] = i[5]
 
                 openList.put(i)
                 openSet.add(i[2][0])
@@ -568,24 +605,21 @@ while not openList.empty() and solved == False:
                 if counter >= 50:
                     outVid.write(cv2.flip(maze, 0))
                     counter = 0
-    
+
         else:
-            print("Gotcha, ", i)
-            # print("OpenSet: ", openSet)
-            # print()
-            # print("ClosedSet: ", closedSet)
             tempIndex = {j for j in coordDict if coordDict[j] == i[2][0]}
             tempIndex = tempIndex.pop()
-            print(tempIndex, costDict[tempIndex], first[3] + i[4], euclideanCostToGo(first[2][0], goal[0]), parentDict[tempIndex])
-            #input()
-            if costDict[tempIndex] > first[3] + i[4]:
+
+            if c2cDict[tempIndex] > first[3] + i[4]:
                 parentDict[tempIndex] = first[1]
                 c2cDict[tempIndex] = first[3] + i[4]
                 costDict[tempIndex] = (
-                    first[3] + i[4] + euclideanCostToGo(i[2][0], goal[0])  # weighted by two
+                    first[3]
+                    + i[4]
+                    + 2 * euclideanCostToGo(i[2][0], goal[0])  # weighted by two
                 )
 
-    # input("Progress to next node?")
+    #input("Progress to next node?")
 
 if solved == False:
     print("Failure! Goal node not found")
@@ -600,7 +634,6 @@ cap = cv2.VideoCapture("output.mp4")
 if cap.isOpened() == False:
     print("Error File Not Found")
 
-
 while cap.isOpened():
     ret, frame = cap.read()
     if ret == True:
@@ -611,10 +644,18 @@ while cap.isOpened():
         break
 
 cap.release()
-print("Video displayed successfully! Program termination  \n")
+print("Video displayed successfully! \n")
 cv2.destroyAllWindows()
+
+
+if __name__=='__main__':
+    actuateTurtlebot(pathIndices,pathCoords,start)
 
 # Resources:
 # https://www.geeksforgeeks.org/python-get-unique-values-list/
 # https://stackoverflow.com/questions/480214/how-do-i-remove-duplicates-from-a-list-while-preserving-order
 # https://emanual.robotis.com/docs/en/platform/turtlebot3/features/#:~:text=The%20dimension%20of%20TurtleBot3%20Burger,L%20x%20W%20x%20H).
+# http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28python%29
+# https://answers.gazebosim.org//question/22125/how-to-set-a-models-position-using-gazeboset_model_state-service-in-python/
+# http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28python%29
+
