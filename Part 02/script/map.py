@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-mazeSize = (250, 600)
+mazeSize = (200, 600)
 clearance = 10
 
 # Create blank maze
@@ -19,29 +19,30 @@ cv2.rectangle(
 
 cv2.rectangle(
     maze,
-    pt1=(150 - clearance, 0),
-    pt2=(165 + clearance, 125 + clearance),
+    pt1=(150 - clearance, 75 -clearance),
+    pt2=(165 + clearance, mazeSize[0] + clearance),
     color=(0, 255, 0),
     thickness=-1,
 )
 
 cv2.rectangle(
     maze,
-    pt1=(250 - clearance, 125 -clearance),
-    pt2=(265 + clearance, 250 + clearance),
+    pt1=(235 - clearance, clearance),
+    pt2=(250 + clearance, 125 + clearance),
     color=(0, 255, 0),
     thickness=-1,
 )
 
-cv2.rectangle(maze, pt1=(150, 0), pt2=(165, 125), color=(0, 0, 255), thickness=-1)
+cv2.rectangle(maze, pt1=(150, 75), pt2=(165, mazeSize[0]), color=(0, 0, 255), thickness=-1)
 cv2.rectangle(
-    maze, pt1=(250, 125), pt2=(265, 250), color=(0, 0, 255), thickness=-1
+    maze, pt1=(235, 0), pt2=(250, 125), color=(0, 0, 255), thickness=-1
 )
 
 # Draw triangular boundary
-cv2.circle(maze, (400, 110 ), (50 + clearance), color=(0, 255, 0), thickness=-1)
-cv2.circle(maze, (400, 110), 50, color=(0, 0, 255), thickness=-1)
+cv2.circle(maze, (400, 90 ), (50 + clearance), color=(0, 255, 0), thickness=-1)
+cv2.circle(maze, (400, 90), 50, color=(0, 0, 255), thickness=-1)
 # Show the maze image
-cv2.imshow("Maze", maze)
+cap = cv2.flip(maze, 0)
+cv2.imshow("Maze", cap)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
