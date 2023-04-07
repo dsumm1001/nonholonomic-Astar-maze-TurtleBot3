@@ -439,7 +439,7 @@ def actuateTurtlebot(pathIndices, pathCoords, startPosition):
     rospy.init_node('robot_talker', anonymous=True)
     rate = rospy.Rate(10)  #10hz
 
-    print("Setting Turtlebot position in map...")
+    print("Setting Turtlebot position in map... \n")
 
     pubModelState = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=10)
     rospy.wait_for_service('/gazebo/set_model_state')
@@ -471,20 +471,20 @@ def actuateTurtlebot(pathIndices, pathCoords, startPosition):
 
     # pub_model_state.publish(modelStateMsg)
 
-    print("Position set! \n")
-    input()
+    print("Position set!")
+    input("Press enter to articulate the robot!")
 
     velMsg = Twist()
     pubCmdVel = rospy.Publisher('/cmd_vel',Twist,queue_size=10)
 
-    print("Articulating Turtlebot3 in gazebo...")
+    print("\n rticulating Turtlebot3 in gazebo...")
     while not rospy.is_shutdown():
         for i in pathVels:
-            velMsg.angular.z = i[1] * 1.00
+            velMsg.angular.z = i[1] * 1.02
             if (i[1] != 0):
-                velMsg.linear.x = i[0] * 1.00
+                velMsg.linear.x = i[0] * 1.02
             else:
-                velMsg.linear.x = i[0] * 1.00
+                velMsg.linear.x = i[0] * 1.0
             pubCmdVel.publish(velMsg)
             rate.sleep()
 
@@ -658,4 +658,4 @@ if __name__=='__main__':
 # http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28python%29
 # https://answers.gazebosim.org//question/22125/how-to-set-a-models-position-using-gazeboset_model_state-service-in-python/
 # http://wiki.ros.org/ROS/Tutorials/WritingPublisherSubscriber%28python%29
-
+# https://de3-panda-wall.readthedocs.io/en/latest/spawn_doc.html

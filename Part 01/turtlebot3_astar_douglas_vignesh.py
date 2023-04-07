@@ -1,6 +1,6 @@
 # ========================================
 # ENPM661 Spring 2023: Robotic Path Planning
-# Project #3 Phase 2
+# Project #3 Phase 2 Part 01
 # Maze Search with Turtlebot3 using A* Algorithm with Non-Holonomic constraints
 #
 # Author: Doug Summerlin (dsumm1001@gmail.com, dsummerl@umd.edu)
