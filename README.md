@@ -35,7 +35,7 @@ Ensure the following libraries are installed so they can be imported as such:
 Ubuntu 20.04 Linux (but Windows 11 should also work)
 
 ### TO RUN SCRIPT:   
-`\$ cd ~/home/.../Proj3\_douglas\_vignesh/Part 01`  
+`\$ cd ~/home/.../proj3p2\_douglas\_vignesh/Part 01`  
 `\$ python3 turtlebot3\_astar\_douglas\_vignesh.py`
 
 ### PROGRAM OUTPUT:
@@ -113,9 +113,8 @@ Press enter in the terminal to begin the simulation. The turtlebot3 will follow 
 User inputs in bold italics  
 
 The radius of the Turtlebot3 burger model is approximately  105.0  [mm].  
-Please enter the desired obstacle clearance as an integer value between 105.0 and 250 [mm]: ***150***  
-Enter two wheel RPMs [rev per minute] as integer values between 1 - 200 , separated by a comma: ***25,50***  
-Enter start node coordinates in x, y format, in [cm], separated by a comma: ***30,30***  
-Enter start node orientation as an integer between 0-359, using increments of 1 deg: ***30***  
-Enter goal node coordinates in x, y format, in [cm], separated by a comma: ***200,120***  
-
+Please enter the desired obstacle clearance as an integer value between 105.0 and 250 [mm]: ***180***  
+Enter two wheel RPMs [rev per minute] as integer values between 1 - 200 , separated by a comma: ***30,50***  
+Enter start node coordinates in x, y format, in [cm], separated by a comma: ***50,25***  
+Enter start node orientation as an integer between 0-359, using increments of 1 deg: ***10***  
+Enter goal node coordinates in x, y format, in [cm], separated by a comma: ***550,182***  
